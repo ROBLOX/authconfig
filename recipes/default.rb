@@ -26,6 +26,16 @@ execute "authconfig-update" do
 	action :nothing
 end
 
+package 'autofs' do
+	action :nothing
+end
+
+#user changes require reloading of ohai for later recipes to use them
+#TODO  only load certain plugins? (passwd)
+ohai "reload" do
+	action :nothing
+end
+
 service "autofs" do
 	supports :status => true, :restart => true, :reload => true
 end
@@ -42,23 +52,38 @@ template "/etc/authconfig/arguments" do
 	mode 0440
 	owner "root"
 	group "root"
+	notifies :install, "package[autofs]" if node['authconfig']['autofs']['enable']
 	notifies :run, "execute[authconfig-update]", :immediately
-	notifies :reload, "service[autofs]" if node['authconfig']['use_autofs']
+	notifies :reload, "service[autofs]", :immediately if node['authconfig']['autofs']['enable']
 end
 
-if node['authconfig']['ldap']['enable']
-  package 'pam_ldap' do
-    action :install
-  end
+if node['authconfig']['kerberos']['enable']
+	package 'pam_krb5' do
+		action :install
+	end
+
+	package "krb5-workstation" do
+		action :install
+	end
 end
 
 if node[:platform_version].to_i == 6
+	if node['authconfig']['ldap']['enable']
+		package 'pam_ldap' do
+			action :install
+		end
+	end
+
 	package "sssd" do
 		action :install
 	end
 
 	service "sssd" do
 		supports :status => true, :restart => true, :reload => true
+		# Avoid starting or restarting sssd if disabled,
+		# especially when kerberos is enabled, and ldap not
+		restart_command "/sbin/chkconfig sssd --list | grep -v :on || /sbin/service sssd restart"
+		start_command "/sbin/chkconfig sssd --list | grep -v :on || /sbin/service sssd start"
 	end
 
 	execute "clean_sss_db" do
@@ -78,6 +103,7 @@ if node[:platform_version].to_i == 6
 		notifies :run, "execute[clean_sss_db]", :immediately
 		notifies :run, "execute[restorecon /etc/sssd/sssd.conf]", :immediately
 		notifies :restart, "service[sssd]", :immediately
+		notifies :reload, "ohai[reload]", :immediately
 	end
 
 elsif node[:platform_version].to_i == 5
@@ -85,11 +111,19 @@ elsif node[:platform_version].to_i == 5
 	execute "sleep 60" do
 		action :nothing
 	end
+
+	if node['authconfig']['ldap']['enable']
+		package 'nss_ldap' do
+			action :install
+		end
+	end
+
 	template "/etc/ldap.conf" do
 		source "ldap.conf.erb"
 		mode 0644
 		owner "root"
 		group "root"
 		notifies :run, "execute[sleep 60]", :immediately
+		notifies :reload, "ohai[reload]", :immediately
 	end
 end
