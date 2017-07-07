@@ -25,39 +25,44 @@ sssd_action = nil
 nslcd_enable = false
 case node['platform']
 when 'redhat', 'centos', 'scientific'
-  case node['platform_version'].to_i
-  when 7
-    sssd_action = 'install'
-    # CentOS 7 requires authconfig update to avoid bugs with multiple LDAP servers
-    authconfig_action = 'upgrade'
-    node.default['authconfig']['ldap']['packages'] = ['nss-pam-ldapd']
-  when 6
+  if node&.cloud&.provider.downcase == 'ec2'
+    # this is also amazon, so do the same thing as when node['platform'] = amazon
     node.default['authconfig']['ldap']['packages'] = ['nss-pam-ldapd','pam_ldap']
-    case node['authconfig']['sssd']['enable']
-    when true
-      sssd_action = 'install'
-    when false
-      sssd_action = 'remove'
-      nslcd_enable = true
-    end
     authconfig_action = 'install'
-  when 5
-    node.default['authconfig']['ldap']['packages'] = []
-    case node['authconfig']['sssd']['enable']
-    when true
-      sssd_action = 'install'
-    when false
-      sssd_action = 'remove'
-      nslcd_enable = false
-    end
-    #must be current
-    authconfig_action = 'upgrade'
   else
-    node.default['authconfig']['ldap']['packages'] = ['nss_ldap']
-    nslcd_enable = true
-    authconfig_action = 'install'
+    case node['platform_version'].to_i
+    when 7
+      sssd_action = 'install'
+      # CentOS 7 requires authconfig update to avoid bugs with multiple LDAP servers
+      authconfig_action = 'upgrade'
+      node.default['authconfig']['ldap']['packages'] = ['nss-pam-ldapd']
+    when 6
+      node.default['authconfig']['ldap']['packages'] = ['nss-pam-ldapd','pam_ldap']
+      case node['authconfig']['sssd']['enable']
+      when true
+        sssd_action = 'install'
+      when false
+        sssd_action = 'remove'
+        nslcd_enable = true
+      end
+      authconfig_action = 'install'
+    when 5
+      node.default['authconfig']['ldap']['packages'] = []
+      case node['authconfig']['sssd']['enable']
+      when true
+        sssd_action = 'install'
+      when false
+        sssd_action = 'remove'
+        nslcd_enable = false
+      end
+      #must be current
+      authconfig_action = 'upgrade'
+    else
+      node.default['authconfig']['ldap']['packages'] = ['nss_ldap']
+      nslcd_enable = true
+      authconfig_action = 'install'
+    end
   end
-
 when 'amazon'
   node.default['authconfig']['ldap']['packages'] = ['nss-pam-ldapd','pam_ldap']
   authconfig_action = 'install'
