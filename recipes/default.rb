@@ -25,7 +25,7 @@ sssd_action = nil
 nslcd_enable = false
 case node['platform']
 when 'redhat', 'centos', 'scientific'
-  if node.dig('cloud', 'provider')&.downcase == 'ec2'
+  if node['cloud'] && node['cloud'].dig('provider')&.downcase == 'ec2'
     # this is also amazon, so do the same thing as when node['platform'] = amazon
     node.default['authconfig']['ldap']['packages'] = ['nss-pam-ldapd','pam_ldap']
     authconfig_action = 'install'
