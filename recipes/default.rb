@@ -141,6 +141,8 @@ if node['authconfig']['kerberos']['enable']
 	end
 end
 
+sssd_service_action = :nothing
+
 # SSSD configuration if installed
 if sssd_action == 'install'
 
@@ -170,15 +172,8 @@ if sssd_action == 'install'
  		notifies :restart, 'service[sssd]', :delayed
  		notifies :reload, 'ohai[reload_passwd]', :immediately
  	end
-end
 
-service "sssd" do
-  supports :status => true, :restart => true, :reload => true
-  # Avoid starting or restarting sssd if disabled,
-  # especially when kerberos is enabled, and ldap not
-  restart_command "/sbin/chkconfig sssd --list | grep -v :on || /sbin/service sssd restart"
-  start_command "/sbin/chkconfig sssd --list | grep -v :on || /sbin/service sssd start"
-  action :nothing
+  sssd_service_action = [:enable, :start]
 end
 
 # Do this last so it modifies all other config files correctly
@@ -192,6 +187,15 @@ template '/etc/authconfig/arguments' do
   notifies :reload, 'service[sssd]', :immediately if sssd_action == 'install'
   notifies :reload, 'service[autofs]', :immediately if node['authconfig']['autofs']['enable']
   notifies :reload, 'ohai[reload_passwd]', :immediately if sssd_action != 'install'
+end
+
+service "sssd" do
+  supports :status => true, :restart => true, :reload => true
+  # Avoid starting or restarting sssd if disabled,
+  # especially when kerberos is enabled, and ldap not
+  restart_command "/sbin/chkconfig sssd --list | grep -v :on || /sbin/service sssd restart"
+  start_command "/sbin/chkconfig sssd --list | grep -v :on || /sbin/service sssd start"
+  action sssd_service_action
 end
 
 service 'nslcd' do
